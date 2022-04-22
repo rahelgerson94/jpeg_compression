@@ -66,6 +66,7 @@ class DCT:
         self.coeffs = fftpack.dct(fftpack.dct(data, axis=0), axis=1) #this works 4/19
         #self.coeffs1 = self.DCT()
         self.coeffs1 = self.dct2() #this works 4/19
+        self.coeffs_quantized = self.downsample()
         #self.downsample
     '''
     def downsample(self, thresh):
@@ -161,22 +162,20 @@ class DCT:
         return y
 
 class Encode:
-    def __init__(self, X):
-        self.X = X.downsample()
+    def __init__(self, DCTObj):
+        self.X_q = DCTObj.coeffs_quantized
         self.N = X.N
-        self.origShape = self.X.shape
-   
-    
+        self.origShape = self.X_q.shape
  
     def zigzag(self):
         h = 0
         v = 0
         vmin = 0
         hmin = 0
-        vmax = self.X.shape[0]
-        hmax = self.X.shape[1]
+        vmax = self.X_q.shape[0]
+        hmax = self.X_q.shape[1]
         i = 0
-
+        
         output = np.zeros(( vmax * hmax), dtype = np.float32)
         while ((v < vmax) and (h < hmax)):
         	
@@ -184,7 +183,7 @@ class Encode:
                 
                 if (v == vmin):
                 	#print(1)
-                    output[i] = self.X[v, h]        # if we got to the first line
+                    output[i] = self.X_q[v, h]        # if we got to the first line
 
                     if (h == hmax):
                         v = v + 1
@@ -195,13 +194,13 @@ class Encode:
 
                 elif ((h == hmax -1 ) and (v < vmax)):   # if we got to the last column
                 	#print(2)
-                	output[i] = self.X[v, h] 
+                	output[i] = self.X_q[v, h] 
                 	v = v + 1
                 	i = i + 1
 
                 elif ((v > vmin) and (h < hmax -1 )):    # all other cases
                 	#print(3)
-                	output[i] = self.X[v, h] 
+                	output[i] = self.X_q[v, h] 
                 	v = v - 1
                 	h = h + 1
                 	i = i + 1
@@ -210,13 +209,13 @@ class Encode:
 
             	if ((v == vmax -1) and (h <= hmax -1)):       # if we got to the last line
             		#print(4)
-            		output[i] = self.X[v, h] 
+            		output[i] = self.X_q[v, h] 
             		h = h + 1
             		i = i + 1
             
             	elif (h == hmin):                  # if we got to the first column
             		#print(5)
-            		output[i] = self.X[v, h] 
+            		output[i] = self.X_q[v, h] 
 
             		if (v == vmax -1):
             			h = h + 1
@@ -227,14 +226,14 @@ class Encode:
 
             	elif ((v < vmax -1) and (h > hmin)):     # all other cases
             		#print(6)
-            		output[i] = self.X[v, h] 
+            		output[i] = self.X_q[v, h] 
             		v = v + 1
             		h = h - 1
             		i = i + 1
 
             if ((v == vmax-1) and (h == hmax-1)):          # bottom right element
             	#print(7)        	
-            	output[i] = self.X[v, h] 
+            	output[i] = self.X_q[v, h] 
             	break
 
         return output
@@ -297,12 +296,12 @@ class Decode:
         self.rle_data = rle
         self.array = [] # output of inverse run-length encoding
         self.DCTMatrix = np.zeros(()) #output of inverse zigzag
-        self.origDims = X.coeffs.shape #orig
+        self.origShape = X.coeffs.shape #orig
    
     #turn 1d arr to 2d matrix
     def  inverse_zigzag(self): 
-        vmax = self.origDims[0]
-        hmax = self.origDims[1]
+        vmax = self.origShape[0]
+        hmax = self.origShape[1]
         h = 0
         v = 0
         vmin = 0
@@ -362,7 +361,7 @@ class Decode:
     def inverse_rle(self):
         DCTarray = []
         EOB = False
-        totLength = self.origDims[0] * self.origDims[1] 
+        totLength = self.origShape[0] * self.origShape[1] 
         print(totLength )
         for i, tup in enumerate(self.rle_data):
             tmpList = self.expand(tup)
@@ -396,13 +395,7 @@ class Decode:
 if __name__ == "__main__":
     ''' test1: data dims < 8 '''
     
-    data = np.array([
-        [0,0,0,20,0,0,0],
-        [0,0,20,50,20,0,0],
-        [0,7,50,90,50,7,0],
-        [0,0,20,50,20,0,0],
-        [0,0,0,20,0,0,0],
-        ])
+    
     plt.matshow(data)
     
     imgObj = image(data = data)
